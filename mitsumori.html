@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="config.js"></script>
 <style>
   body{font-family:'Noto Sans JP',sans-serif;background:#f1f5f9;color:#1e293b}
@@ -111,6 +112,29 @@
   var urlCode = params.get('c');
   var sb = null;
   var myCode = null;
+  var current = null;   // { company, title } 通知メール用
+
+  function escT(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function notifyAdmin(amount, comment){
+    try{
+      if(!(CFG.EMAILJS_PUBLIC_KEY && CFG.EMAILJS_SERVICE_ID && CFG.EMAILJS_TEMPLATE_ID && window.emailjs)) return;
+      emailjs.init({ publicKey: CFG.EMAILJS_PUBLIC_KEY });
+      var co = current ? current.company : '';
+      var ti = current ? current.title : '';
+      var html = '<div style="font-family:sans-serif;color:#1e293b;font-size:14px;line-height:1.9;max-width:640px">'
+        + '<b>見積が届きました。</b><br><br>'
+        + '<div style="background:#f1f5f9;border-left:4px solid #cbd5e1;border-radius:4px;padding:12px 16px">'
+        + '案件：' + escT(ti) + '<br>会社：' + escT(co) + '<br>金額：' + yen(amount) + '（税込）'
+        + (comment && comment.trim() ? '<br>コメント：' + escT(comment) : '') + '</div><br>'
+        + '<a href="' + CFG.SITE_BASE + '/index.html" style="display:inline-block;background:#0f172a;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">管理ページで見積を比べる</a></div>';
+      emailjs.send(CFG.EMAILJS_SERVICE_ID, CFG.EMAILJS_TEMPLATE_ID, {
+        to_email: 'naruo.kaitai@gmail.com',
+        subject: '見積が届きました｜' + co + '｜' + ti,
+        message: html,
+        reply_to: 'naruo.kaitai@gmail.com'
+      }).catch(function(){});
+    }catch(e){}
+  }
 
   function show(id){
     ['view-nocfg','view-nolink','view-code','view-main','view-loading'].forEach(function(v){
@@ -142,6 +166,7 @@
     myCode = myCode.toUpperCase();
     saveCode(myCode);
     var pr = data.project;
+    current = { company: data.company, title: pr.title };
     document.getElementById('co-name').textContent = data.company;
     document.getElementById('p-title').textContent = pr.title;
     document.getElementById('p-loc').textContent = pr.location || '';
@@ -219,6 +244,7 @@
       document.getElementById('quote-area').classList.add('hidden');
       document.getElementById('done-amt').textContent = yen(Number(d)) + ' で提出しました';
       document.getElementById('done-area').classList.remove('hidden');
+      notifyAdmin(Number(d), document.getElementById('in-comment').value);
     });
   };
 

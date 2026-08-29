@@ -462,7 +462,7 @@ function openGmailDraft(){
   var bcc = invitedContractors(p).map(function(c){ return c.email; }).join(',');
   var url = 'mailto:' + encodeURIComponent(adminEmail) +
     '?bcc=' + encodeURIComponent(bcc) +
-    '&subject=' + encodeURIComponent('【成王建設】見積のお願い｜' + p.title) +
+    '&subject=' + encodeURIComponent('見積のお願い｜' + p.title) +
     '&body=' + encodeURIComponent(mailBody(p));
   location.href = url;
 }
@@ -527,7 +527,7 @@ function autoSend(){
   var chain = Promise.resolve();
   targets.forEach(function(c){
     chain = chain.then(function(){
-      return sendMailRaw(c.email, '【成王建設】見積のお願い｜' + p.title, vendorMailHtml(p, c))
+      return sendMailRaw(c.email, '見積のお願い｜' + p.title, vendorMailHtml(p, c))
         .then(function(){ okCount++; }, function(){});
     });
   });
@@ -594,7 +594,7 @@ function renderDetail(pid){
   });
   noQuote.forEach(function(c){
     var remind = 'mailto:' + encodeURIComponent(c.email) +
-      '?subject=' + encodeURIComponent('【成王建設】見積のお願い（再送）｜' + p.title) +
+      '?subject=' + encodeURIComponent('見積のお願い（再送）｜' + p.title) +
       '&body=' + encodeURIComponent(mailBody(p));
     rows += '<tr><td class="py-3 px-3 text-slate-400 whitespace-nowrap">' + esc(c.name) + '</td>' +
       '<td class="py-3 px-3" colspan="3"><span class="text-[11px] border border-slate-200 bg-slate-50 text-slate-400 rounded-full px-3 py-1">未提出</span></td>' +
@@ -609,8 +609,10 @@ function renderDetail(pid){
   el('list-view').classList.add('hidden');
   var dv = el('detail-view');
   dv.classList.remove('hidden');
+  var notice = decideNotice; decideNotice = '';
   dv.innerHTML =
     '<button class="text-xs font-bold text-slate-500 mb-3" onclick="showTab(\'list\')">← 一覧に戻る</button>' +
+    (notice ? '<p class="text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2 mb-3">' + notice + '</p>' : '') +
     '<div class="bg-white border border-slate-200 rounded-lg shadow-sm p-5 md:p-7 mb-4">' +
       '<p class="serif font-bold text-lg text-slate-900">' + esc(p.title) + '</p>' +
       '<p class="text-xs text-slate-500 mt-1">' + esc(p.location || '') +
@@ -635,11 +637,31 @@ function renderDetail(pid){
   window.scrollTo({ top: 0 });
 }
 
+var decideNotice = '';
 function decide(pid, cid, name){
-  if(!confirm('発注先を「' + name + '」に決定します。よろしいですか？')) return;
+  if(!confirm('発注先を「' + name + '」に決定します。決定の連絡メールがその会社に送られます。よろしいですか？')) return;
   sb.from('projects').update({ status: 'decided', decided_contractor: cid }).eq('id', pid)
     .then(function(){ return reloadAll(); })
-    .then(function(){ renderDetail(pid); });
+    .then(function(){
+      var p = DB.projects.find(function(x){ return x.id === pid; });
+      var c = vendorById(cid);
+      if(p && c && emailjsReady()){
+        var q = DB.quotes.find(function(x){ return x.project_id === pid && x.contractor_id === cid; });
+        var html = '<div style="font-family:sans-serif;color:#1e293b;font-size:14px;line-height:1.9;max-width:640px">'
+          + esc(c.name) + ' 様<br><br>いつもお世話になっております。成王建設です。<br>'
+          + 'お見積をいただいておりました下記の案件について、貴社へ発注させていただくことに決定いたしました。<br><br>'
+          + '<div style="background:#f1f5f9;border-left:4px solid #cbd5e1;border-radius:4px;padding:12px 16px"><b>' + esc(p.title) + '</b>'
+          + (q ? '<br>ご提出いただいた金額：' + yen(q.amount) + '（税込）' : '') + '</div><br>'
+          + '日程などの詳細は、追って担当よりご連絡いたします。<br>引き続きよろしくお願いいたします。<br><br>株式会社成王建設<br>'
+          + '<span style="font-size:12px;color:#64748b">TEL 089-924-6604 ／ このメールに返信いただければ担当に届きます。</span></div>';
+        sendMailRaw(c.email, '発注のご連絡｜' + p.title, html).then(
+          function(){ decideNotice = '✓ 発注先を決定し、' + c.name + ' 様へ連絡メールを送りました。'; renderDetail(pid); },
+          function(){ decideNotice = '発注先を決定しました（連絡メールが送れなかったため、お電話等でご連絡ください）。'; renderDetail(pid); }
+        );
+        return;
+      }
+      renderDetail(pid);
+    });
 }
 function removeProject(pid){
   if(!confirm('この案件と、提出された見積をすべて削除します。よろしいですか？')) return;
