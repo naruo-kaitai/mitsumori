@@ -96,16 +96,17 @@
 
         <!-- 登録後：メール送信パネル -->
         <div id="new-sent" class="hidden bg-white border border-slate-200 rounded-lg shadow-sm p-5 md:p-7">
-          <p class="text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2 inline-block mb-4">✓ 案件を登録しました</p>
+          <p id="sent-head" class="text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2 inline-block mb-4">✓ 案件を登録しました</p>
           <h2 class="serif font-bold text-lg text-slate-900 mb-1">協力会社に知らせる</h2>
-          <p class="text-xs text-slate-500 mb-5">まず自分宛のプレビューで内容を確認してから、協力会社に送ります。</p>
 
-          <div id="send-auto">
-            <button id="btn-preview" onclick="sendPreview()" class="w-full bg-slate-900 text-white py-4 rounded font-bold tracking-widest hover:bg-slate-700 transition-colors">① 自分にプレビューメールを送る</button>
-            <p id="preview-result" class="text-[11px] text-slate-400 mt-1.5 mb-4"></p>
-            <button id="btn-autosend" onclick="autoSend()" disabled class="w-full bg-white border-2 border-slate-900 text-slate-900 py-4 rounded font-bold tracking-widest transition-colors opacity-40">② プレビューOK → 協力会社に送る</button>
-            <p id="autosend-result" class="hidden text-xs font-bold text-green-700 mt-2"></p>
-            <p class="text-[11px] text-slate-400 mt-5 mb-2 border-t border-slate-100 pt-4">自動送信を使わない場合はこちら：</p>
+          <div id="send-auto" class="mt-3">
+            <p id="approval-status" class="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-4 py-3 leading-relaxed mb-4"></p>
+            <div class="flex flex-col sm:flex-row gap-2 mb-2">
+              <button id="btn-approval" onclick="sendApproval(true)" class="flex-1 bg-white border-2 border-slate-900 text-slate-900 py-3.5 rounded font-bold text-sm tracking-wider hover:bg-slate-50">確認メールを再送する</button>
+              <button id="btn-directsend" onclick="autoSend()" class="flex-1 bg-[#890a1e] text-white py-3.5 rounded font-bold text-sm tracking-wider hover:bg-[#6f0818]">メールを待たずに今すぐ送信する</button>
+            </div>
+            <p id="autosend-result" class="hidden text-xs font-bold text-green-700 mb-2"></p>
+            <p class="text-[11px] text-slate-400 mt-3 mb-2 border-t border-slate-100 pt-4">自動送信を使わない場合はこちら：</p>
           </div>
           <p id="autosend-note" class="hidden text-[11px] text-slate-400 mb-2"></p>
           <button onclick="openGmailDraft()" class="w-full bg-white border border-slate-300 text-slate-700 py-3.5 rounded font-bold tracking-wider hover:bg-slate-50 transition-colors mb-1 text-sm">Gmailの下書きを開いて送る（宛先・本文入り）</button>
@@ -116,6 +117,17 @@
             <div id="sent-links" class="space-y-2"></div>
           </div>
           <button onclick="showTab('list')" class="w-full mt-6 bg-white border border-slate-300 text-slate-600 py-3 rounded text-sm font-bold hover:bg-slate-50">案件一覧を見る</button>
+        </div>
+
+        <!-- 確認メールの「OK」ボタンから来たとき -->
+        <div id="send-confirm" class="hidden bg-white border border-slate-200 rounded-lg shadow-sm p-5 md:p-7">
+          <h2 class="serif font-bold text-lg text-slate-900 mb-1">協力会社への送信</h2>
+          <p class="text-xs text-slate-500 mb-4">確認メールからの送信手続きです。内容がOKなら、下のボタンを押してください。</p>
+          <p id="sc-title" class="font-bold text-slate-900 mb-1"></p>
+          <p id="sc-targets" class="text-xs text-slate-500 mb-5"></p>
+          <button id="btn-confirm-send" onclick="autoSend()" class="w-full bg-[#890a1e] text-white py-4 rounded font-bold tracking-widest hover:bg-[#6f0818]">協力会社にメールを送信する</button>
+          <p id="sc-result" class="hidden text-sm font-bold text-green-700 text-center mt-4"></p>
+          <button onclick="showTab('list')" class="w-full mt-5 bg-white border border-slate-300 text-slate-600 py-3 rounded text-sm font-bold hover:bg-slate-50">案件一覧を見る</button>
         </div>
       </section>
 
@@ -188,7 +200,41 @@ function logout(){ sb.auth.signOut().then(function(){ location.reload(); }); }
 function enterApp(session){
   adminEmail = (session && session.user && session.user.email) || '';
   showView('view-app');
-  reloadAll().then(function(){ showTab('new'); });
+  reloadAll().then(function(){
+    var qp = new URLSearchParams(location.search);
+    var sendId = qp.get('send'), editId = qp.get('edit');
+    if(sendId || editId){ history.replaceState(null, '', location.pathname); }
+    var p;
+    if(sendId && (p = DB.projects.find(function(x){ return x.id === sendId; }))){
+      lastProject = p;
+      showTab('new');
+      el('new-form').classList.add('hidden');
+      el('new-sent').classList.add('hidden');
+      el('send-confirm').classList.remove('hidden');
+      el('sc-title').textContent = p.title;
+      var t = invitedContractors(p);
+      el('sc-targets').textContent = '送信先：' + t.map(function(c){ return c.name; }).join('、') + '（' + t.length + '社）';
+      return;
+    }
+    if(editId && (p = DB.projects.find(function(x){ return x.id === editId; }))){
+      enterEditMode(p);
+      return;
+    }
+    showTab('new');
+  });
+}
+function enterEditMode(p){
+  showTab('new');
+  editingId = p.id;
+  lastProject = p;
+  el('np-text').value = p.title + (p.body ? '\n\n' + p.body : '');
+  npSelected = (p.invited && p.invited.length) ? p.invited.slice() : null;
+  el('btn-save').textContent = '修正を保存して、確認メールを再送する →';
+  window.scrollTo({ top: 0 });
+}
+function editProject(pid){
+  var p = DB.projects.find(function(x){ return x.id === pid; });
+  if(p) enterEditMode(p);
 }
 
 /* ---------- データ読み込み ---------- */
@@ -214,8 +260,13 @@ function showTab(name){
   });
   if(name === 'list'){ el('detail-view').classList.add('hidden'); el('list-view').classList.remove('hidden'); reloadAll().then(renderList); }
   if(name === 'vendors'){ reloadAll().then(renderVendors); }
-  if(name === 'new'){ el('new-form').classList.remove('hidden'); el('new-sent').classList.add('hidden'); reloadAll().then(renderCompsNew); }
+  if(name === 'new'){ el('new-form').classList.remove('hidden'); el('new-sent').classList.add('hidden'); el('send-confirm').classList.add('hidden'); resetEditMode(); reloadAll().then(renderCompsNew); }
   window.scrollTo({ top: 0 });
+}
+var editingId = null;
+function resetEditMode(){
+  editingId = null;
+  var b = el('btn-save'); if(b){ b.textContent = '登録して、次へ（メール送信）→'; }
 }
 
 /* ---------- 送付先の選択 ---------- */
@@ -311,20 +362,19 @@ function saveProject(){
   var lines = text.split('\n');
   var title = lines.shift().trim();
   var body = lines.join('\n').trim();
-  var row = {
-    title: title,
-    location: null,
-    body: body || null,
-    target_price: null,
-    deadline: null,
-    invited: npSelected.slice()
-  };
+  var wasEdit = !!editingId;
+  var patch = { title: title, body: body || null, invited: npSelected.slice() };
 
-  sb.from('projects').insert(row).select().single().then(function(res){
-    if(res.error){ b.disabled = false; b.textContent = '登録して、次へ（メール送信）→'; err.textContent = '登録できませんでした：' + res.error.message; err.classList.remove('hidden'); return; }
+  var q = wasEdit
+    ? sb.from('projects').update(patch).eq('id', editingId).select().single()
+    : sb.from('projects').insert({ title: title, location: null, body: body || null, target_price: null, deadline: null, invited: npSelected.slice() }).select().single();
+
+  q.then(function(res){
+    if(res.error || !res.data){ b.disabled = false; resetEditMode(); err.textContent = '保存できませんでした：' + (res.error ? res.error.message : ''); err.classList.remove('hidden'); return; }
     var project = res.data;
     var files = Array.prototype.slice.call(el('np-photos').files);
-    var urls = [];
+    var urls = (project.photos || []).slice();
+    var hadNew = files.length > 0;
     var chain = Promise.resolve();
     files.forEach(function(f, i){
       chain = chain.then(function(){ return compressImage(f); }).then(function(blob){
@@ -335,38 +385,40 @@ function saveProject(){
       });
     });
     chain.then(function(){
-      var done = urls.length ? sb.from('projects').update({ photos: urls }).eq('id', project.id) : Promise.resolve();
+      var done = hadNew ? sb.from('projects').update({ photos: urls }).eq('id', project.id) : Promise.resolve();
       return Promise.resolve(done);
     }).then(function(){
       project.photos = urls;
       lastProject = project;
-      b.disabled = false; b.textContent = '登録して、次へ（メール送信）→';
+      b.disabled = false; resetEditMode();
       // フォームを初期化
       el('np-text').value = '';
       el('np-photos').value = ''; el('np-preview').innerHTML = '';
       npSelected = null;
-      openSentPanel(project);
+      openSentPanel(project, { justSaved: true, wasEdit: wasEdit });
     });
   });
 }
 
-function openSentPanel(project){
+function openSentPanel(project, opts){
+  opts = opts || {};
   el('new-form').classList.add('hidden');
+  el('send-confirm').classList.add('hidden');
   el('new-sent').classList.remove('hidden');
   el('autosend-result').classList.add('hidden');
-  var btn = el('btn-autosend');
-  previewSent = false;
+  el('sent-head').textContent = opts.wasEdit ? '✓ 修正を保存しました' : '✓ 案件を登録しました';
   if(emailjsReady()){
     el('send-auto').classList.remove('hidden');
     el('autosend-note').classList.add('hidden');
-    el('btn-preview').disabled = false;
-    el('btn-preview').textContent = '① 自分にプレビューメールを送る';
-    el('preview-result').textContent = '→ ' + (adminEmail || '自分のアドレス') + ' に届きます。この時点では協力会社にはまだ送られません。';
-    btn.disabled = true; btn.classList.add('opacity-40');
+    if(opts.justSaved){
+      sendApproval(false);
+    } else {
+      el('approval-status').textContent = '「確認メールを再送する」を押すと、内容チェック用のメールが ' + ADMIN_MAIL + ' に届きます。';
+    }
   } else {
     el('send-auto').classList.add('hidden');
     el('autosend-note').classList.remove('hidden');
-    el('autosend-note').textContent = '※ 自動送信（①プレビュー→②OK方式）は未設定です。設定ガイドの手順5で使えるようになります。下のGmail下書き方式なら、本文を目で確認してから自分で送信できます。';
+    el('autosend-note').textContent = '※ メール自動送信（確認メール→OKボタン方式）は未設定です。設定ガイドの手順5で使えるようになります。下のGmail下書き方式なら、本文を目で確認してから自分で送信できます。';
   }
   var box = el('sent-links'); box.innerHTML = '';
   invitedContractors(project).forEach(function(c){
@@ -414,53 +466,77 @@ function openGmailDraft(){
     '&body=' + encodeURIComponent(mailBody(p));
   location.href = url;
 }
-var previewSent = false;
-function sendPreview(){
-  var p = lastProject; if(!p || !emailjsReady()) return;
-  var b = el('btn-preview'); b.disabled = true; b.textContent = '送信中…';
+var ADMIN_MAIL = 'naruo.kaitai@gmail.com';
+function sendMailRaw(toEmail, subject, html){
   emailjs.init({ publicKey: CFG.EMAILJS_PUBLIC_KEY });
-  emailjs.send(CFG.EMAILJS_SERVICE_ID, CFG.EMAILJS_TEMPLATE_ID, {
-    to_email: adminEmail, to_name: '成王建設（プレビュー確認用）',
-    project_title: '【プレビュー】' + p.title,
-    content: projectText(p),
-    link: CFG.SITE_BASE + '/mitsumori.html?p=' + p.id,
-    code: '（会社ごとの専用コードが入ります）',
-    reply_to: adminEmail
-  }).then(function(){
-    previewSent = true;
-    b.disabled = false; b.textContent = '✓ プレビュー送信済み（もう一度送るには押す）';
-    el('preview-result').textContent = 'メールを開いて内容を確認し、問題なければ②を押してください。';
-    var a = el('btn-autosend'); a.disabled = false; a.classList.remove('opacity-40');
+  return emailjs.send(CFG.EMAILJS_SERVICE_ID, CFG.EMAILJS_TEMPLATE_ID, {
+    to_email: toEmail, subject: subject, message: html, reply_to: ADMIN_MAIL
+  });
+}
+function contentBlockHtml(p){
+  return '<div style="background:#f1f5f9;border-left:4px solid #cbd5e1;border-radius:4px;padding:12px 16px;white-space:pre-wrap;font-size:14px;line-height:1.9">' + esc(projectText(p)) + '</div>';
+}
+function vendorMailHtml(p, c){
+  return '<div style="font-family:sans-serif;color:#1e293b;font-size:14px;line-height:1.9;max-width:640px">'
+    + esc(c.name) + ' 様<br><br>いつもお世話になっております。成王建設です。<br>下記の案件について、お見積をお願いいたします。<br><br>'
+    + contentBlockHtml(p)
+    + '<br><a href="' + vendorLink(p, c) + '" style="display:inline-block;background:#0f172a;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">写真の確認・見積の入力はこちら</a><br>'
+    + '<span style="font-size:12px;color:#64748b">※ 初回のみ、会社コード「' + esc(c.code) + '」の入力が必要です。</span><br><br>'
+    + 'お手数をおかけしますが、よろしくお願いいたします。<br>株式会社成王建設<br>'
+    + '<span style="font-size:12px;color:#64748b">TEL 089-924-6604 ／ このメールに返信いただければ担当に届きます。</span></div>';
+}
+function approvalMailHtml(p){
+  var targets = invitedContractors(p);
+  var photos = (p.photos || []).map(function(u){
+    return '<a href="' + u + '"><img src="' + u + '" width="130" style="border-radius:6px;margin:2px;vertical-align:top"></a>';
+  }).join('');
+  var links = targets.map(function(c){
+    return '<div style="margin:8px 0;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px"><b>' + esc(c.name) + '</b><br><span style="font-size:12px;word-break:break-all">' + vendorLink(p, c) + '</span></div>';
+  }).join('');
+  var approveUrl = CFG.SITE_BASE + '/index.html?send=' + p.id;
+  var editUrl = CFG.SITE_BASE + '/index.html?edit=' + p.id;
+  return '<div style="font-family:sans-serif;color:#1e293b;font-size:14px;line-height:1.9;max-width:640px">'
+    + '<b>新しい案件が登録されました。</b><br>内容を確認して、OKなら下の赤いボタンを押してください（送信画面が開きます）。<br><br>'
+    + contentBlockHtml(p)
+    + (photos ? '<div style="margin:10px 0">' + photos + '</div>' : '')
+    + '<div style="font-size:13px;margin:6px 0 16px">送信先：' + targets.map(function(c){ return esc(c.name); }).join('、') + '（' + targets.length + '社）</div>'
+    + '<a href="' + approveUrl + '" style="display:inline-block;background:#890a1e;color:#ffffff;padding:14px 28px;text-decoration:none;border-radius:6px;font-weight:bold">OK！協力会社にメールを送る</a>'
+    + '&nbsp;&nbsp;<a href="' + editUrl + '" style="display:inline-block;border:2px solid #0f172a;color:#0f172a;padding:12px 22px;text-decoration:none;border-radius:6px;font-weight:bold">内容を修正する</a>'
+    + '<br><br><div style="font-size:12px;color:#64748b">LINEで送りたい会社には、下のその会社専用リンクをコピーして送ってください（その場合、上のボタンは押さなくてOKです）。</div>'
+    + links + '</div>';
+}
+function sendApproval(manual){
+  var p = lastProject; if(!p || !emailjsReady()) return;
+  var st = el('approval-status');
+  var b = el('btn-approval'); if(b){ b.disabled = true; }
+  if(st) st.textContent = '確認メールを送信中…';
+  sendMailRaw(ADMIN_MAIL, '【要確認】協力会社への送信前チェック｜' + p.title, approvalMailHtml(p)).then(function(){
+    if(b) b.disabled = false;
+    if(st) st.innerHTML = '✓ 確認メールを <b>' + ADMIN_MAIL + '</b> に送りました。<br>メールを開いて内容をチェックし、赤い「OK！協力会社にメールを送る」ボタンを押すと送信されます。';
   }, function(){
-    b.disabled = false; b.textContent = '① 自分にプレビューメールを送る';
-    el('preview-result').textContent = '送信できませんでした。少し待ってからもう一度お試しください。';
+    if(b) b.disabled = false;
+    if(st) st.textContent = '確認メールを送れませんでした。少し待って「確認メールを再送する」を押してください。';
   });
 }
 function autoSend(){
-  var p = lastProject; if(!p || !emailjsReady() || !previewSent) return;
-  var btn = el('btn-autosend'); btn.disabled = true; btn.textContent = '送信中…';
-  emailjs.init({ publicKey: CFG.EMAILJS_PUBLIC_KEY });
-  var okCount = 0;
+  var p = lastProject; if(!p || !emailjsReady()) return;
+  var btns = ['btn-directsend', 'btn-confirm-send'].map(el).filter(Boolean);
+  btns.forEach(function(x){ x.disabled = true; });
   var targets = invitedContractors(p);
+  var okCount = 0;
   var chain = Promise.resolve();
   targets.forEach(function(c){
     chain = chain.then(function(){
-      return emailjs.send(CFG.EMAILJS_SERVICE_ID, CFG.EMAILJS_TEMPLATE_ID, {
-        to_email: c.email, to_name: c.name,
-        project_title: p.title,
-        content: projectText(p),
-        link: vendorLink(p, c), code: c.code,
-        reply_to: 'naruo.kaitai@gmail.com'
-      }).then(function(){ okCount++; }, function(){});
+      return sendMailRaw(c.email, '【成王建設】見積のお願い｜' + p.title, vendorMailHtml(p, c))
+        .then(function(){ okCount++; }, function(){});
     });
   });
   chain.then(function(){
-    btn.textContent = '② プレビューOK → 協力会社に送る';
-    var r = el('autosend-result');
-    r.textContent = '✓ ' + okCount + ' / ' + targets.length + ' 社にメールを送りました';
-    r.classList.remove('hidden');
-    if(okCount === targets.length){ btn.disabled = true; btn.classList.add('opacity-40'); }
-    else { btn.disabled = false; }
+    var msg = '✓ ' + okCount + ' / ' + targets.length + ' 社にメールを送りました';
+    ['autosend-result', 'sc-result'].forEach(function(id){
+      var r = el(id); if(r){ r.textContent = msg; r.classList.remove('hidden'); }
+    });
+    if(okCount < targets.length){ btns.forEach(function(x){ x.disabled = false; }); }
   });
 }
 
@@ -549,9 +625,12 @@ function renderDetail(pid){
       '<th class="text-left py-2 px-3 border-b-2 border-slate-100">協力会社</th><th class="text-left py-2 px-3 border-b-2 border-slate-100">金額（税込）</th><th class="text-left py-2 px-3 border-b-2 border-slate-100">コメント</th><th class="text-left py-2 px-3 border-b-2 border-slate-100">提出</th><th class="border-b-2 border-slate-100"></th>' +
       '</tr></thead><tbody class="divide-y divide-slate-50">' + rows + '</tbody></table></div>' +
     '</div>' +
-    '<div class="flex justify-between items-center">' +
+    '<div class="flex justify-between items-center gap-2 flex-wrap">' +
       '<button class="text-[11px] text-slate-400 underline" onclick="removeProject(\'' + p.id + '\')">この案件を削除する</button>' +
-      '<button class="text-xs font-bold border border-slate-300 rounded px-4 py-2 text-slate-600 hover:bg-white" onclick="lastProject = DB.projects.find(function(x){ return x.id === \'' + p.id + '\'; }); showTab(\'new\'); openSentPanel(lastProject);">メールを再送する・リンクを見る</button>' +
+      '<div class="flex gap-2">' +
+        '<button class="text-xs font-bold border border-slate-300 rounded px-4 py-2 text-slate-600 hover:bg-white" onclick="editProject(\'' + p.id + '\')">内容を修正する</button>' +
+        '<button class="text-xs font-bold border border-slate-300 rounded px-4 py-2 text-slate-600 hover:bg-white" onclick="lastProject = DB.projects.find(function(x){ return x.id === \'' + p.id + '\'; }); showTab(\'new\'); openSentPanel(lastProject);">メール・リンクを見る</button>' +
+      '</div>' +
     '</div>';
   window.scrollTo({ top: 0 });
 }
