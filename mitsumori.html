@@ -95,6 +95,19 @@
           <p class="text-xs text-slate-500 mt-2 leading-relaxed">ご提出ありがとうございます。成王建設からのご連絡をお待ちください。</p>
           <button onclick="reopenForm()" class="mt-4 text-xs font-bold text-slate-600 underline">金額を修正する</button>
         </div>
+
+        <!-- 請求書の提出 -->
+        <div class="hidden border-t border-slate-100 p-5" id="invoice-area">
+          <p class="font-bold text-sm text-slate-900 mb-1">請求書の提出</p>
+          <p class="text-xs text-slate-500 leading-relaxed mb-3">請求書（PDFまたは写真）をこちらから提出できます。</p>
+          <div id="inv-current" class="hidden bg-green-50 border border-green-200 rounded-md px-4 py-3 text-xs text-green-800 leading-relaxed mb-3">
+            ✓ 提出済み：<a id="inv-link" href="#" target="_blank" rel="noopener" class="font-bold underline break-all"></a>（<span id="inv-at"></span>）<br>差し替える場合は、もう一度アップロードしてください。
+          </div>
+          <input type="file" id="inv-file" accept="application/pdf,image/*"
+            class="block w-full text-xs text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded file:border-0 file:bg-slate-900 file:text-white file:text-xs file:font-bold mb-3">
+          <p id="inv-err" class="hidden text-xs font-bold text-[#890a1e] mb-2 text-center"></p>
+          <button onclick="uploadInvoice()" id="btn-inv" class="w-full bg-slate-900 text-white py-3.5 rounded font-bold tracking-widest hover:bg-slate-700 transition-colors">請求書を提出する</button>
+        </div>
       </div>
 
       <p class="text-[10px] text-slate-400 leading-relaxed mt-4">お問い合わせ：株式会社成王建設　TEL <a href="tel:0899246604" class="underline">089-924-6604</a></p>
@@ -203,8 +216,78 @@
       document.getElementById('q-already').classList.remove('hidden');
       document.getElementById('in-amount').value = Number(q.amount).toLocaleString('ja-JP');
       document.getElementById('in-comment').value = q.comment || '';
+      document.getElementById('invoice-area').classList.remove('hidden');
+      renderInvoice(q);
     }
     show('view-main');
+  }
+
+  function renderInvoice(q){
+    if(!q || !q.invoice_url) return;
+    var a = document.getElementById('inv-link');
+    a.href = q.invoice_url;
+    a.textContent = q.invoice_name || '請求書ファイル';
+    var t = q.invoice_at ? new Date(q.invoice_at) : null;
+    document.getElementById('inv-at').textContent = t ? (t.getMonth()+1) + '/' + t.getDate() + ' 提出' : '提出済み';
+    document.getElementById('inv-current').classList.remove('hidden');
+  }
+
+  window.uploadInvoice = function(){
+    var inp = document.getElementById('inv-file');
+    var err = document.getElementById('inv-err');
+    var file = inp.files && inp.files[0];
+    if(!file){ err.textContent = 'ファイルを選んでください'; err.classList.remove('hidden'); return; }
+    if(file.size > 15 * 1024 * 1024){ err.textContent = 'ファイルが大きすぎます（15MBまで）。写真を選び直すか、PDFにしてお試しください。'; err.classList.remove('hidden'); return; }
+    err.classList.add('hidden');
+    var btn = document.getElementById('btn-inv');
+    btn.disabled = true; btn.textContent = '送信中…';
+    var ext = (file.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf';
+    var path = 'inv_' + projectId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+    sb.storage.from('invoices').upload(path, file, { contentType: file.type || 'application/octet-stream' }).then(function(up){
+      if(up.error){ throw up.error; }
+      var url = sb.storage.from('invoices').getPublicUrl(path).data.publicUrl;
+      return sb.rpc('attach_invoice_for_code', {
+        p_project: projectId, p_code: myCode, p_url: url, p_name: file.name
+      }).then(function(res){
+        btn.disabled = false; btn.textContent = '請求書を提出する';
+        if(res.error || !res.data || !res.data.ok){
+          if(res.data && res.data.error === 'no_quote'){
+            err.textContent = '先に上の欄からお見積金額をご提出ください。';
+          } else {
+            err.textContent = '送信できませんでした。もう一度お試しください。';
+          }
+          err.classList.remove('hidden'); return;
+        }
+        inp.value = '';
+        renderInvoice({ invoice_url: url, invoice_name: file.name, invoice_at: new Date().toISOString() });
+        notifyInvoice(url, file.name);
+      });
+    }).catch(function(){
+      btn.disabled = false; btn.textContent = '請求書を提出する';
+      err.textContent = '送信できませんでした。電波の良い場所でもう一度お試しください。';
+      err.classList.remove('hidden');
+    });
+  };
+
+  function notifyInvoice(url, name){
+    try{
+      if(!(CFG.EMAILJS_PUBLIC_KEY && CFG.EMAILJS_SERVICE_ID && CFG.EMAILJS_TEMPLATE_ID && window.emailjs)) return;
+      emailjs.init({ publicKey: CFG.EMAILJS_PUBLIC_KEY });
+      var co = current ? current.company : '';
+      var ti = current ? current.title : '';
+      var html = '<div style="font-family:sans-serif;color:#1e293b;font-size:14px;line-height:1.9;max-width:640px">'
+        + '<b>請求書が届きました。</b><br><br>'
+        + '<div style="background:#f1f5f9;border-left:4px solid #cbd5e1;border-radius:4px;padding:12px 16px">'
+        + '案件：' + escT(ti) + '<br>会社：' + escT(co) + '<br>ファイル：' + escT(name) + '</div><br>'
+        + '<a href="' + url + '" style="display:inline-block;background:#890a1e;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">請求書を開く</a>'
+        + '&nbsp;&nbsp;<a href="' + CFG.SITE_BASE + '/index.html" style="display:inline-block;border:2px solid #0f172a;color:#0f172a;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold">管理ページを開く</a></div>';
+      emailjs.send(CFG.EMAILJS_SERVICE_ID, CFG.EMAILJS_TEMPLATE_ID, {
+        to_email: 'naruo.kaitai@gmail.com',
+        subject: '請求書が届きました｜' + co + '｜' + ti,
+        message: html,
+        reply_to: 'naruo.kaitai@gmail.com'
+      }).catch(function(){});
+    }catch(e){}
   }
 
   function load(code){
@@ -244,6 +327,7 @@
       document.getElementById('quote-area').classList.add('hidden');
       document.getElementById('done-amt').textContent = yen(Number(d)) + ' で提出しました';
       document.getElementById('done-area').classList.remove('hidden');
+      document.getElementById('invoice-area').classList.remove('hidden');
       notifyAdmin(Number(d), document.getElementById('in-comment').value);
     });
   };
