@@ -228,7 +228,7 @@ function enterEditMode(p){
   editingId = p.id;
   lastProject = p;
   el('np-text').value = p.title + (p.body ? '\n\n' + p.body : '');
-  npSelected = (p.invited && p.invited.length) ? p.invited.slice() : null;
+  npSelected = (p.invited && p.invited.length) ? p.invited.slice() : DB.contractors.map(function(c){ return c.id; });
   el('btn-save').textContent = '修正を保存して、確認メールを再送する →';
   window.scrollTo({ top: 0 });
 }
@@ -272,7 +272,7 @@ function resetEditMode(){
 /* ---------- 送付先の選択 ---------- */
 var npSelected = null;   // 選択中の協力会社id（null = 全社）
 function renderCompsNew(){
-  if(npSelected === null) npSelected = DB.contractors.map(function(c){ return c.id; });
+  if(npSelected === null) npSelected = [];
   npSelected = npSelected.filter(function(id){ return DB.contractors.some(function(c){ return c.id === id; }); });
   var box = el('np-comps'); box.innerHTML = '';
   if(!DB.contractors.length){
@@ -584,7 +584,10 @@ function renderDetail(pid){
       '<td class="py-3 px-3 font-bold text-slate-900 whitespace-nowrap">' + esc(name) +
         (isMin ? '<span class="ml-2 text-[10px] font-bold text-white bg-[#890a1e] rounded-full px-2 py-0.5 align-middle">最安</span>' : '') + '</td>' +
       '<td class="py-3 px-3 whitespace-nowrap"><span class="serif font-bold text-lg text-slate-900">' + yen(q.amount) + '</span><span class="block text-[10px] text-slate-400">約 ' + man(q.amount) + '</span></td>' +
-      '<td class="py-3 px-3 text-xs text-slate-500 leading-relaxed" style="min-width:11em">' + esc(q.comment || 'ー') + '</td>' +
+      '<td class="py-3 px-3 text-xs text-slate-500 leading-relaxed" style="min-width:11em">' + esc(q.comment || 'ー') +
+        (q.invoice_url
+          ? '<br><a href="' + q.invoice_url + '" target="_blank" rel="noopener" class="inline-block mt-1 text-[11px] font-bold text-[#890a1e] underline">📄 請求書を見る（' + fdate(q.invoice_at) + ' 提出）</a>'
+          : '') + '</td>' +
       '<td class="py-3 px-3 text-[11px] text-slate-400 whitespace-nowrap">' + fdate(q.updated_at) + '</td>' +
       '<td class="py-3 px-3 text-right whitespace-nowrap">' +
         (isDecided
