@@ -551,7 +551,7 @@ function renderList(){
     return;
   }
   DB.projects.forEach(function(p){
-    var qs = quotesOf(p.id);
+    var qs = quotesOf(p.id).filter(function(q){ return q.amount != null; });
     var decided = p.status === 'decided';
     var dName = decided && p.decided_contractor && vendorById(p.decided_contractor) ? vendorById(p.decided_contractor).name : '';
     var d = document.createElement('button');
@@ -571,8 +571,10 @@ function renderList(){
 function renderDetail(pid){
   var p = DB.projects.find(function(x){ return x.id === pid; });
   if(!p) return;
-  var qs = quotesOf(pid).slice().sort(function(a, b){ return a.amount - b.amount; });
-  var noQuote = invitedContractors(p).filter(function(c){ return !qs.some(function(q){ return q.contractor_id === c.id; }); });
+  var allQ = quotesOf(pid);
+  var qs = allQ.filter(function(q){ return q.amount != null; }).sort(function(a, b){ return a.amount - b.amount; });
+  var invOnly = allQ.filter(function(q){ return q.amount == null; });
+  var noQuote = invitedContractors(p).filter(function(c){ return !allQ.some(function(q){ return q.contractor_id === c.id; }); });
 
   var rows = '';
   qs.forEach(function(q, i){
@@ -594,6 +596,16 @@ function renderDetail(pid){
           ? '<span class="text-[11px] font-bold text-white bg-[#890a1e] rounded px-3 py-1.5">発注先に決定済み</span>'
           : (c ? '<button class="text-[11px] font-bold border border-slate-900 text-slate-900 rounded px-3 py-1.5 hover:bg-slate-900 hover:text-white" onclick="decide(\'' + p.id + '\',\'' + c.id + '\',\'' + esc(name) + '\')">この会社に発注</button>' : '')) +
       '</td></tr>';
+  });
+  invOnly.forEach(function(q){
+    var c = vendorById(q.contractor_id);
+    var iname = c ? c.name : '（削除済みの会社）';
+    rows += '<tr><td class="py-3 px-3 font-bold text-slate-500 whitespace-nowrap">' + esc(iname) + '</td>' +
+      '<td class="py-3 px-3 whitespace-nowrap"><span class="text-[11px] border border-slate-200 bg-slate-50 text-slate-400 rounded-full px-3 py-1">金額は未提出</span></td>' +
+      '<td class="py-3 px-3 text-xs text-slate-500">' +
+        (q.invoice_url ? '<a href="' + q.invoice_url + '" target="_blank" rel="noopener" class="text-[11px] font-bold text-[#890a1e] underline">📄 請求書を見る（' + fdate(q.invoice_at) + ' 提出）</a>' : 'ー') + '</td>' +
+      '<td class="py-3 px-3 text-[11px] text-slate-400 whitespace-nowrap">' + fdate(q.invoice_at || q.updated_at) + '</td>' +
+      '<td></td></tr>';
   });
   noQuote.forEach(function(c){
     var remind = 'mailto:' + encodeURIComponent(c.email) +
