@@ -88,7 +88,7 @@
             class="w-full border-2 border-slate-300 rounded px-4 py-3 text-sm focus:border-slate-900 focus:outline-none"></textarea>
 
           <label class="block text-xs font-bold text-slate-600 mt-4 mb-1">ファイルを添付<span class="font-normal text-slate-400 ml-1">（任意）</span></label>
-          <p class="text-[11px] text-slate-400 leading-relaxed mb-2">請求書や写真など添付するものがございましたら、こちらにアップロードしてください。</p>
+          <p class="text-[11px] text-slate-400 leading-relaxed mb-2">見積書や写真など添付するものがございましたら、こちらにアップロードしてください。</p>
           <div id="inv-current" class="hidden bg-green-50 border border-green-200 rounded-md px-4 py-3 text-xs text-green-800 leading-relaxed mb-2">
             ✓ 添付済み：<a id="inv-link" href="#" target="_blank" rel="noopener" class="font-bold underline break-all"></a>（<span id="inv-at"></span>）<br>差し替える場合は、新しいファイルを選んで提出してください。
           </div>
@@ -225,7 +225,7 @@
     if(!q || !q.invoice_url) return;
     var a = document.getElementById('inv-link');
     a.href = q.invoice_url;
-    a.textContent = q.invoice_name || '請求書ファイル';
+    a.textContent = q.invoice_name || '添付ファイル';
     var t = q.invoice_at ? new Date(q.invoice_at) : null;
     document.getElementById('inv-at').textContent = t ? (t.getMonth()+1) + '/' + t.getDate() + ' 提出' : '提出済み';
     document.getElementById('inv-current').classList.remove('hidden');

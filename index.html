@@ -588,7 +588,7 @@ function renderDetail(pid){
       '<td class="py-3 px-3 whitespace-nowrap"><span class="serif font-bold text-lg text-slate-900">' + yen(q.amount) + '</span><span class="block text-[10px] text-slate-400">約 ' + man(q.amount) + '</span></td>' +
       '<td class="py-3 px-3 text-xs text-slate-500 leading-relaxed" style="min-width:11em">' + esc(q.comment || 'ー') +
         (q.invoice_url
-          ? '<br><a href="' + q.invoice_url + '" target="_blank" rel="noopener" class="inline-block mt-1 text-[11px] font-bold text-[#890a1e] underline">📄 請求書を見る（' + fdate(q.invoice_at) + ' 提出）</a>'
+          ? '<br><a href="' + q.invoice_url + '" target="_blank" rel="noopener" class="inline-block mt-1 text-[11px] font-bold text-[#890a1e] underline">📄 添付ファイルを見る（' + fdate(q.invoice_at) + ' 提出）</a>'
           : '') + '</td>' +
       '<td class="py-3 px-3 text-[11px] text-slate-400 whitespace-nowrap">' + fdate(q.updated_at) + '</td>' +
       '<td class="py-3 px-3 text-right whitespace-nowrap">' +
@@ -603,7 +603,7 @@ function renderDetail(pid){
     rows += '<tr><td class="py-3 px-3 font-bold text-slate-500 whitespace-nowrap">' + esc(iname) + '</td>' +
       '<td class="py-3 px-3 whitespace-nowrap"><span class="text-[11px] border border-slate-200 bg-slate-50 text-slate-400 rounded-full px-3 py-1">金額は未提出</span></td>' +
       '<td class="py-3 px-3 text-xs text-slate-500">' +
-        (q.invoice_url ? '<a href="' + q.invoice_url + '" target="_blank" rel="noopener" class="text-[11px] font-bold text-[#890a1e] underline">📄 請求書を見る（' + fdate(q.invoice_at) + ' 提出）</a>' : 'ー') + '</td>' +
+        (q.invoice_url ? '<a href="' + q.invoice_url + '" target="_blank" rel="noopener" class="text-[11px] font-bold text-[#890a1e] underline">📄 添付ファイルを見る（' + fdate(q.invoice_at) + ' 提出）</a>' : 'ー') + '</td>' +
       '<td class="py-3 px-3 text-[11px] text-slate-400 whitespace-nowrap">' + fdate(q.invoice_at || q.updated_at) + '</td>' +
       '<td></td></tr>';
   });
